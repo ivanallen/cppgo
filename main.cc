@@ -5,6 +5,7 @@
 
 #include "context.h"
 #include "chan.h"
+#include "go.h"
 
 
 void show(const Context& ctx) {
@@ -100,37 +101,41 @@ void test4() {
     auto c = with_cancel(b);
     auto ctx = std::get<0>(c);
     auto cancel = std::get<1>(c);
-    std::thread t([ctx]{
+    Go<>([ctx]{
         auto c1 = with_cancel(ctx);
         auto c2 = with_cancel(ctx);
-        auto t1 = std::thread([c1]{
+
+        Go<decltype(c1)>([](decltype(c1) c1){
             auto ctx1 = std::get<0>(c1);
             auto active = choose({ctx1->done()});
             if (active[0]) {
                 std::cout << "canceled c1" << std::endl;
             }
-        });
-        auto t2 = std::thread([c2]{
+        })(c1);
+
+        Go<>([c2]{
             auto ctx2 = std::get<0>(c2);
             auto active = choose({ctx2->done()});
             if (active[0]) {
                 std::cout << "canceled c2" << std::endl;
             }
-        });
+        })();
+
         auto active = choose({ctx->done()});
         if (active[0]) {
             std::cout << "canceled c" << std::endl;
         }
-
-        t1.join();
-        t2.join();
-    });
+    })();
 
     std::cout << "cancel after 3s" << std::endl;
     std::this_thread::sleep_for(std::chrono::seconds(3));
     cancel();
+}
 
-    t.join();
+void test5() {
+    Go<int, int>([](int a, int b) {
+        std::cout << "a = " << a << "; b = " << b << std::endl;
+    })(1, 2);
 }
 
 int main() {
@@ -139,7 +144,9 @@ int main() {
     //test2();
     //test3();
     test4();
+    test5();
 
+    std::this_thread::sleep_for(std::chrono::seconds(3));
     std::cout << "---------- end ----------" << std::endl;
 	return 0;
 }
